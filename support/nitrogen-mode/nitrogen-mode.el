@@ -133,5 +133,67 @@
 ;; (add-to-list 'auto-mode-alist '("\\.erl\\'" . nitrogen-mode))
 ;; (add-to-list 'auto-mode-alist '("\\.hrl\\'" . nitrogen-mode))
 
+(defun nitrogen-node-running-p ()
+  (let ((nitrogen-bin (nitrogen-locate-file
+                       (buffer-file-name)
+                       (concat (file-name-as-directory "bin") "nitrogen"))))
+    (string-match-p
+     "^pong"
+     (shell-command-to-string (concat nitrogen-bin " ping")))))
+
+(defun nitrogen-erlang-machine-options ()
+  (let ((vm-args-file-name (nitrogen-locate-vm-args (buffer-file-name))))
+    (if (and vm-args-file-name (nitrogen-node-running-p))
+        (let ((vm-args (nitrogen-read-vm-args vm-args-file-name)))
+          (list "-remsh"     (nitrogen-find-vm-arg "-name" vm-args)
+                "-setcookie" (nitrogen-find-vm-arg "-setcookie" vm-args)
+                "-name"      (format "emacs%d" (random t))))
+      '())))
+
+(defun nitrogen-locate-vm-args (dir)
+  (nitrogen-locate-file dir  (concat (file-name-as-directory "etc") "vm.args")))
+
+(defun nitrogen-locate-file (start-dir file-relname)
+  (let* ((parent-dir (file-name-directory (directory-file-name start-dir)))
+         (file-name  (concat (file-name-as-directory parent-dir) file-relname)))
+    (cond ((string= parent-dir start-dir)
+           nil)
+          ((file-exists-p file-name)
+           file-name)
+          (t
+           (nitrogen-locate-file parent-dir file-relname)))))
+
+(defun nitrogen-read-vm-args (vm-args)
+  (with-temp-buffer
+    (insert-file-contents vm-args)
+    (goto-char (point-min))
+    (let ((args nil))
+      (while (not (eobp))
+        (if (looking-at "[-+]")
+            (let ((line (buffer-substring (line-beginning-position)
+                                          (line-end-position))))
+              (setq args (append args (list (split-string line))))))
+        (forward-line))
+      args)))
+
+(defun nitrogen-find-vm-arg (vm-arg-name vm-args)
+  (if vm-args
+      (let ((vm-arg-kv-pair (car vm-args)))
+        (if (string= vm-arg-name (car vm-arg-kv-pair))
+            (mapconcat (lambda (x) x) (cdr vm-arg-kv-pair) " ")
+          (nitrogen-find-vm-arg vm-arg-name (cdr vm-args))))
+    nil))
+
+(defun nitrogen-compile ()
+  (interactive)
+  (let ((inferior-erlang-machine-options
+         (append inferior-erlang-machine-options
+                 (nitrogen-erlang-machine-options))))
+    (erlang-compile)))
+
+(defun nitrogen-setup-keybindings-hook ()
+  (local-set-key "\C-c\C-k" 'nitrogen-compile))
+
+(add-hook 'nitrogen-mode-hook 'nitrogen-setup-keybindings-hook)
 
 (provide 'nitrogen-mode)
