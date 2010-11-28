@@ -184,6 +184,15 @@
           (nitrogen-find-vm-arg vm-arg-name (cdr vm-args))))
     nil))
 
+;;; Evaluate a command in an erlang buffer
+(defun nitrogen-inferior-erlang-send-command (command)
+  "Evaluate a command in an erlang buffer."
+  (interactive "P")
+  (inferior-erlang-prepare-for-input)
+  (inferior-erlang-send-command command)
+  (sit-for 0) ;; redisplay
+  (inferior-erlang-wait-prompt))
+
 (defun nitrogen-compile ()
   (interactive)
   (let ((inferior-erlang-machine-options
@@ -191,8 +200,17 @@
                  (nitrogen-erlang-machine-options))))
     (erlang-compile)))
 
+(defun nitrogen-compile-all ()
+  (interactive)
+  (save-some-buffers)
+  (let ((inferior-erlang-machine-options
+         (append inferior-erlang-machine-options
+                 (nitrogen-erlang-machine-options))))
+    (nitrogen-inferior-erlang-send-command "sync:go().")))
+
 (defun nitrogen-setup-keybindings-hook ()
-  (local-set-key "\C-c\C-k" 'nitrogen-compile))
+  (local-set-key "\C-c\C-k" 'nitrogen-compile)
+  (local-set-key "\C-c\C-nk" 'nitrogen-compile-all))
 
 (add-hook 'nitrogen-mode-hook 'nitrogen-setup-keybindings-hook)
 
